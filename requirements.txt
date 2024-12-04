@@ -1,0 +1,9 @@
+gpxpy
+pandas
+geopy
+matplotlib
+seaborn
+folium
+aiogram
+python-dotenv
+requests
