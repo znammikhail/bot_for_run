@@ -4,8 +4,9 @@ from geopy.distance import geodesic
 import matplotlib.pyplot as plt
 import seaborn as sns
 import folium
+import sqlite3
 
-file_path = "Zepp_test_run.gpx"
+#file_path = "Zepp_test_run.gpx"
 
 # === Модуль 1: Парсинг GPX данных ===
 def parse_gpx(file_path):
@@ -85,7 +86,6 @@ def parse_gpx(file_path):
     }
     return summary, df
 
-
 # === Модуль 2: Построение карты ===
 def plot_map(df):
     start_coords = (df["latitude"].iloc[0], df["longitude"].iloc[0])
@@ -140,6 +140,40 @@ def plot_time_in_zones(time_in_zones_percent):
     plt.xticks(rotation=15)
     plt.tight_layout()
     plt.show()
+
+# === Модуль 5: Запись в базу данных ===
+
+# Создание/подключение к базе данных SQLite
+conn = sqlite3.connect('run_data.db')
+cursor = conn.cursor()
+
+# Создание таблицы, если она не существует
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT,
+    distance REAL,
+    average_speed REAL,
+    average_heart_rate REAL,
+    average_cadence REAL,
+    total_time INTEGER,
+    run_type TEXT
+)
+""")
+# Функция для добавления данных о пробежке в таблицу
+def insert_run_data(run_data):
+    cursor.execute("""
+    INSERT INTO runs (time, distance, average_pace, average_heart_rate, average_cadence, total_time)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        run_data["time"], 
+        run_data["distance"], 
+        run_data["average_pace"], 
+        run_data["average_heart_rate"], 
+        run_data["average_cadence"], 
+        run_data["total_time"], 
+    ))
+    conn.commit()
 
 
 # === Главная программа ===
