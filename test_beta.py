@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import folium
 
+file_path = "Zepp_test_run.gpx"
 
 # === Модуль 1: Парсинг GPX данных ===
 def parse_gpx(file_path):
