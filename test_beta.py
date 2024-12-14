@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import folium
 import sqlite3
+from lxml import etree # Для пасринга gpx-файла (библиотека gpxpy не обрабатывает данные из раздела metadata)
+from datetime import datetime
 
 #file_path = "Zepp_test_run.gpx"
 
@@ -21,7 +23,22 @@ def parse_gpx(file_path):
     """
     with open(file_path, 'r') as gpx_file:
         gpx = gpxpy.parse(gpx_file)
+        gpx_file.seek(0) # Для парсинга даты сооздания файла
+        tree = etree.parse(gpx_file) # Для парсинга даты сооздания файла
 
+    # === Парсинг даты создания файла ===
+    metadata_time = tree.xpath('//default:metadata/default:time', namespaces={'default': 'http://www.topografix.com/GPX/1/1'})
+
+    if metadata_time:
+        creation_date = metadata_time[0].text
+        try:
+            creation_date = datetime.strptime(creation_date, '%Y-%m-%dT%H:%M:%SZ')
+        except ValueError:
+            creation_date = None
+    else:
+        creation_date = None
+
+    # === Парсинг остальных данных ===
     data = {"latitude": [], "longitude": [], "time": [], "heart_rate": [], "cadence": []}
     total_distance = 0.0
     previous_point = None
@@ -76,12 +93,22 @@ def parse_gpx(file_path):
     average_pace_min = int((total_time / total_distance_km) // 60) if total_distance_km > 0 else 0
     average_pace_sec = int((total_time / total_distance_km) % 60) if total_distance_km > 0 else 0
 
+    # summary_tech = [
+    # total_distance_km,
+    # round(average_speed_kmh, 1),
+    # round(average_heart_rate, 1) if average_heart_rate else None,
+    # f"{average_pace_min}:{average_pace_sec:02}",
+    # int(total_time),
+    # round(average_cadence, 1) if average_cadence else None
+    # ]
+
     summary = {
+        "Дата создания файла": creation_date.strftime('%Y-%m-%d %H:%M:%S') if creation_date else None,
         "Расстояние (км)": total_distance_km,
+        "Общее время (сек)": int(total_time),
         "Средняя скорость (км/ч)": round(average_speed_kmh, 1),
         "Средний пульс": round(average_heart_rate, 1) if average_heart_rate else None,
         "Средний темп (мин:сек)": f"{average_pace_min}:{average_pace_sec:02}",
-        "Общее время (сек)": int(total_time),
         "Средний каденс (шагов/мин)": round(average_cadence, 1) if average_cadence else None
     }
     return summary, df
@@ -143,37 +170,61 @@ def plot_time_in_zones(time_in_zones_percent):
 
 # === Модуль 5: Запись в базу данных ===
 
-# Создание/подключение к базе данных SQLite
-conn = sqlite3.connect('run_data.db')
-cursor = conn.cursor()
-
 # Создание таблицы, если она не существует
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS runs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT,
-    distance REAL,
-    average_speed REAL,
-    average_heart_rate REAL,
-    average_cadence REAL,
-    total_time INTEGER,
-    run_type TEXT
-)
-""")
-# Функция для добавления данных о пробежке в таблицу
-def insert_run_data(run_data):
+def create_runs_table(cursor):
     cursor.execute("""
-    INSERT INTO runs (time, distance, average_pace, average_heart_rate, average_cadence, total_time)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    CREATE TABLE IF NOT EXISTS runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INT,
+        date DATETIME,
+        distance REAL,
+        total_time REAL,
+        average_speed REAL,
+        average_heart_rate REAL,
+        average_pace REAL,
+        average_cadence REAL
+    )
+    """)
+    # Создаём уникальный индекс для user_id и date (ускоряет поиск и предотвращает дубли)
+    cursor.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_user_date ON runs (user_id, date)
+    """)
+
+# Функция для добавления данных о пробежке в таблицу
+# def insert_run_data(cursor, user_id, run_summary):
+#     # Дата для проверки
+#     date_to_check = run_summary.get("Дата создания файла", None)
+#     cursor.execute("""
+#     INSERT INTO runs (user_id, date, distance, total_time, average_speed, average_heart_rate, average_pace, average_cadence)
+#     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+#     """, (
+#         user_id,
+#         run_summary.get("Дата создания файла", None),  # None будет вставлено, если ключа нет
+#         run_summary.get("Расстояние (км)", None),
+#         run_summary.get("Общее время (сек)", None),  
+#         run_summary.get("Средняя скорость (км/ч)", None),  
+#         run_summary.get("Средний пульс", None),  
+#         run_summary.get("Средний темп (мин:сек)", None),  
+#         run_summary.get("Средний каденс (шагов/мин)", None)  
+#     ))
+def insert_run_data(cursor, user_id, run_summary):
+    cursor.execute("""
+    INSERT OR IGNORE INTO runs (user_id, date, distance, total_time, average_speed, average_heart_rate, average_pace, average_cadence)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        run_data["time"], 
-        run_data["distance"], 
-        run_data["average_pace"], 
-        run_data["average_heart_rate"], 
-        run_data["average_cadence"], 
-        run_data["total_time"], 
+        user_id,
+        run_summary.get("Дата создания файла", None),
+        run_summary.get("Расстояние (км)", None),
+        run_summary.get("Общее время (сек)", None),  
+        run_summary.get("Средняя скорость (км/ч)", None),  
+        run_summary.get("Средний пульс", None),  
+        run_summary.get("Средний темп (мин:сек)", None),  
+        run_summary.get("Средний каденс (шагов/мин)", None)  
     ))
-    conn.commit()
+    if cursor.rowcount == 0:
+        print("Запись для этой даты и пользователя уже существует, вставка пропущена.")
+    else:
+        print("Новая запись успешно добавлена.")
 
 
 # === Главная программа ===
@@ -183,6 +234,18 @@ if __name__ == "__main__":
 
     summary, df = parse_gpx(gpx_file_path)
     print("Резюме данных:", summary)
+
+    user_id = 3 # Уникальный id пользователя
+
+    try:  # Оборачивание кода в try предотвращает падение программы в случае ошибки
+        with sqlite3.connect('run_data.db') as conn:
+            cursor = conn.cursor()
+            create_runs_table(cursor)
+            insert_run_data(cursor, user_id, summary)
+            conn.commit()
+    except Exception as e:
+        print(f"Произошла ошибка: {e}")
+
 
     plot_map(df)
 

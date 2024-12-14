@@ -7,3 +7,4 @@ folium
 aiogram
 python-dotenv
 requests
+lxml
