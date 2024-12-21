@@ -9,6 +9,7 @@ import requests
 from geopy.distance import geodesic
 
 from gpx_parser import parse_gpx # импорт парсера
+from heart_rate import calculate_heart_rate_zones # импорт функции расчёта пульсовых зон
 
 # Загружаем переменные из .env файла
 load_dotenv()
@@ -30,17 +31,6 @@ main_keyboard = ReplyKeyboardMarkup(
 
 # Словарь для хранения данных пользователя
 user_data = {}
-
-# Функция расчёта пульсовых зон с новой формулой
-def calculate_heart_zones(pano: int):
-    zones = { 
-        "Zone 1 (легкая)": (0, 0.8 * pano),
-        "Zone 2 (средняя)": (0.8 * pano, 0.89 * pano),
-        "Zone 3 (тяжелая)": (0.9 * pano, 0.99 * pano),
-        "Zone 4 (очень тяжелая)": (pano, 1.09 * pano),
-        "Zone 5 (максимальная)": (1.1 * pano, float('inf')),
-    }
-    return zones
 
 
 # Обработчик команды /start
@@ -71,7 +61,7 @@ async def handle_pano_input(message: Message):
         user_data[user_id]["state"] = None
 
         # Рассчитываем зоны
-        zones = calculate_heart_zones(pano)
+        zones = calculate_heart_rate_zones(pano)
 
         # Отправляем результат
         response = "Твои пульсовые зоны:\n"
