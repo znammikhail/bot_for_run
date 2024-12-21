@@ -8,6 +8,8 @@ import gpxpy
 import requests
 from geopy.distance import geodesic
 
+from gpx_parser import parse_gpx # импорт парсера
+
 # Загружаем переменные из .env файла
 load_dotenv()
 
@@ -40,83 +42,6 @@ def calculate_heart_zones(pano: int):
     }
     return zones
 
-# Функция для обработки GPX файла
-def parse_gpx(file_path):
-    with open(file_path, 'r') as gpx_file:
-        gpx = gpxpy.parse(gpx_file)
-    
-    total_distance = 0.0  # Общая дистанция в метрах
-    total_time = 0.0  # Общее время в секундах
-    total_cadence = 0  # Сумма всех каденсов
-    total_heart_rate = 0  # Сумма всех пульсов
-    cadence_count = 0  # Количество точек с каденсом
-    heart_rate_count = 0  # Количество точек с пульсом
-    
-    start_time = None
-    end_time = None
-    previous_point = None
-
-    for track in gpx.tracks:
-        for segment in track.segments:
-            for point in segment.points:
-                # Работа с координатами для подсчета расстояния
-                if previous_point:
-                    distance = geodesic(
-                        (previous_point.latitude, previous_point.longitude),
-                        (point.latitude, point.longitude)
-                    ).meters
-                    total_distance += distance
-                previous_point = point
-                
-                # Работа с временными метками
-                if point.time:
-                    if not start_time:
-                        start_time = point.time
-                    end_time = point.time
-
-                # Извлечение данных из extensions
-                if point.extensions:
-                    for ext in point.extensions:
-                        if ext.tag.endswith("TrackPointExtension"):
-                            for child in ext:
-                                if child.tag.endswith("hr"):  # Пульс
-                                    total_heart_rate += int(child.text)
-                                    heart_rate_count += 1
-                                if child.tag.endswith("cad"):  # Каденс (учет двух ног)
-                                    total_cadence += int(child.text) * 2
-                                    cadence_count += 1
-    
-    # Расчет времени
-    total_time = (end_time - start_time).total_seconds() if start_time and end_time else 0
-
-    # Перевод расстояния в километры с округлением до 0.1
-    total_distance_km = round(total_distance / 1000, 1)
-
-    # Средняя скорость (км/ч)
-    average_speed_kmh = (total_distance_km / (total_time / 3600)) if total_time > 0 else 0
-
-    # Средний темп (мин:сек/км)
-    average_pace_sec = (total_time / total_distance_km) if total_distance_km > 0 else 0
-    average_pace_min = int(average_pace_sec // 60)
-    average_pace_rem_sec = int(average_pace_sec % 60)
-
-    # Общее время в формате ЧЧ:ММ:СС
-    hours = int(total_time // 3600)
-    minutes = int((total_time % 3600) // 60)
-    seconds = int(total_time % 60)
-
-    # Средний пульс и каденс
-    average_heart_rate = total_heart_rate / heart_rate_count if heart_rate_count > 0 else None
-    average_cadence = total_cadence / cadence_count if cadence_count > 0 else None
-
-    return {
-        "Средний пульс": round(average_heart_rate, 1) if average_heart_rate else None,
-        "Расстояние (км)": total_distance_km,
-        "Средний темп (мин:сек)": f"{average_pace_min}:{average_pace_rem_sec:02}",
-        "Общее время (ч:м:с)": f"{hours}:{minutes:02}:{seconds:02}",
-        "Средняя скорость (км/ч)": round(average_speed_kmh, 1),
-        "Средний каденс (шагов/мин)": round(average_cadence, 1) if average_cadence else None,
-    }
 
 # Обработчик команды /start
 @dp.message(Command("start"))
@@ -176,7 +101,7 @@ async def handle_gpx_file(message: Message):
             f.write(gpx_data)
         
         # Парсим GPX файл
-        gpx_result = parse_gpx('temp.gpx')
+        gpx_result, gpx_df = parse_gpx('temp.gpx')
 
         # Отправляем результаты пользователю
         result_message = "\n".join([f"{key}: {value}" for key, value in gpx_result.items()])
