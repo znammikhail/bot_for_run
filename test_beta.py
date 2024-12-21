@@ -1,8 +1,7 @@
-
-from gpx_parser import parse_gpx # импорт парсера
-from map_plotter import plot_map # импрот построения карты
-from heart_rate import calculate_heart_rate_zones, analyze_time_in_zones, plot_time_in_zones # импорт функциий пульса
-from db_writer import create_runs_table, insert_run_data # импорт записи в базу данных
+from utils.gpx_parser import parse_gpx # импорт парсера
+from utils.map_plotter import plot_map # импрот построения карты
+from utils.heart_rate import calculate_heart_rate_zones, analyze_time_in_zones, plot_time_in_zones # импорт функциий пульса
+from utils.db_writer import create_runs_table, insert_run_data # импорт записи в базу данных
 import sqlite3
 
 #file_path = "Zepp_test_run.gpx"
