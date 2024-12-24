@@ -1,7 +1,7 @@
-﻿from aiogram import Router, F
+from aiogram import Router, F
 from aiogram.types import Message
 
-from heart_rate import calculate_heart_rate_zones # импорт функции расчёта пульсовых зон.
+from utils.heart_rate import calculate_heart_rate_zones # импорт функции расчёта пульсовых зон.
 # calculate_heart_rate_zones можно импортировать не сюда, а в онсновой файл, и передавать функцию в качестве аргумента обработчика
 
 # Инициализация Router
